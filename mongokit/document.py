@@ -84,7 +84,8 @@ class DocumentProperties(SchemaProperties):
                         raise BadIndexError(
                           "'fields' key must be specify in indexes")
                     for key, value in index.iteritems():
-                        if key not in ['fields', 'unique', 'ttl', 'check']:
+                        if key not in ['fields', 'ttl', 'check', 'unique', 'sparse', 'dropDupes',
+                                       'drop_dupes','bucketSize', 'bucket_size', 'min', 'max']:
                             raise BadIndexError(
                               "%s is unknown key for indexes" % key)
                         if key == "fields":
@@ -126,7 +127,7 @@ class DocumentProperties(SchemaProperties):
                             else:
                                 raise BadIndexError(
                                   "fields must be a string, a tuple or a list of tuple (got %s instead)" % type(value))
-                        elif key == "ttl":
+                        elif key in ['ttl', 'bucketSize', 'bucket_size', 'min', 'max']:
                             assert isinstance(value, int)
                         else:
                             assert value in [False, True], value
@@ -424,27 +425,22 @@ class Document(SchemaDocument):
         self.collection.remove({'_id':self['_id']})
 
     @classmethod
-    def generate_index(cls, collection):
+    def generate_index(cls, collection, background=False):
         # creating index if needed
-        for index in cls.indexes:
-            unique = False
-            if 'unique' in index.keys():
-                unique = index['unique']
-            ttl = 300
-            if 'ttl' in index.keys():
-                ttl = index['ttl']
-            if isinstance(index['fields'], tuple):
-                fields = [index['fields']]
-            elif isinstance(index['fields'], basestring):
-                fields = [(index['fields'], 1)]
+        for index in deepcopy(cls.indexes):
+            given_fields = index.pop('fields', list())
+            if isinstance(given_fields, tuple):
+                fields = [given_fields]
+            elif isinstance(given_fields, basestring):
+                fields = [(given_fields, 1)]
             else:
                 fields = []
-                for field in index['fields']:
+                for field in given_fields:
                     if isinstance(field, basestring):
                         field = (field, 1)
                     fields.append(field)
-            log.debug('Creating index for %s' % str(index['fields']))
-            collection.ensure_index(fields, unique=unique, ttl=ttl)
+            log.debug('Creating index for %s' % str(given_fields))
+            collection.ensure_index(fields, background=background, index**)
 
     def to_json_type(self):
         """
